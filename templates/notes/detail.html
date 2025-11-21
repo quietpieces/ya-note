@@ -6,9 +6,9 @@
   <p>{{ note.text }}</p>
   <hr>
   <p>
-    <a href="{% url 'notes:edit' slug=note.slug %}">Редактировать</a>
+    <a href="{% url 'notes:edit' note_slug=note.slug %}">Редактировать</a>
   </p>
   <p>
-    <a href="{% url 'notes:delete' slug=note.slug %}">Удалить</a>
+    <a href="{% url 'notes:delete' note_slug=note.slug %}">Удалить</a>
   </p>
 {% endblock content %}
