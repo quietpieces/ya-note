@@ -70,8 +70,6 @@ class TestRoutes(TestCase):
             (self.non_author, HTTPStatus.NOT_FOUND),
         )
         for user, status in users_statuses:
-            # После теста клиент "разлогинивает" пользователя, т.к работа
-            # в транзакциях.
             self.client.force_login(user)
             for name in self.NOTE_URLS:
                 url = reverse(name, kwargs={'note_slug': self.note.slug})

@@ -1,7 +1,7 @@
 """Проверка списка заметок и детальной информации о заметке."""
 
 
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
 
 from django.contrib.auth import get_user_model
@@ -71,10 +71,8 @@ class TestNoteDetail(TestCase):
             slug='testnote'
         )
         cls.url = reverse('notes:detail', kwargs={'note_slug': cls.note.slug})
-
-    def setUp(self):
-        """Авторизует автора комментария."""
-        self.client.force_login(self.author)
+        cls.auth_client = Client()
+        cls.auth_client.force_login(cls.author)
 
     def test_note_detail_contains_expected_fields(self):
         """
@@ -82,7 +80,7 @@ class TestNoteDetail(TestCase):
 
         Поля включают id, title, text, slug и author.
         """
-        response = self.client.get(self.url)
+        response = self.auth_client.get(self.url)
 
         self.assertIn('note', response.context)
         note_obj = response.context['note']
@@ -97,10 +95,7 @@ class TestNoteDetail(TestCase):
 
         for field, exp_value in expected:
             with self.subTest(field=field):
-                self.assertEqual(
-                    getattr(note_obj, field),
-                    exp_value
-                )
+                self.assertEqual(getattr(note_obj, field), exp_value)
 
     def test_note_detail_contains_edit_and_delete_href(self):
         """
@@ -109,7 +104,7 @@ class TestNoteDetail(TestCase):
         Проверяются наличие href для редактирования и удаления с
         соответствующими маршрутами.
         """
-        response = self.client.get(self.url)
+        response = self.auth_client.get(self.url)
 
         self.assertIn('note', response.context)
         note_obj = response.context['note']
