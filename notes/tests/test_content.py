@@ -1,11 +1,13 @@
-"""Проверка списка заметок и детальной информации о заметке."""
+"""Тесты для списка заметок."""
 
 
 from django.test import Client, TestCase
 from django.urls import reverse
+from http import HTTPStatus
 
 from django.contrib.auth import get_user_model
 
+from notes.forms import NoteForm
 from notes.models import Note
 
 
@@ -20,103 +22,52 @@ class TestNoteList(TestCase):
         """
         Создаёт тестовые данные для всех тестов в классе.
 
-        Создаётся пользователь и несколько заметок для тестирования.
-        """
-        cls.author = User.objects.create(username='Автор заметки')
-        Note.objects.bulk_create(
-            Note(
-                title=f'Заметка {index}',
-                text='Просто текст.',
-                author=cls.author,
-                slug=f'note-{index}'
-                )
-            for index in range(3)
-        )
-
-    def test_notes_order(self):
-        """
-        Проверяет, что заметки в списке выводятся в порядке их создания.
-
-        С помощью сравнения pk убеждаемся, что каждый последующий объект имеет
-        больший pk.
-        """
-        self.client.force_login(self.author)
-        url = reverse('notes:list')
-        self.client.get(url)
-        notes = list(Note.objects.all())
-        for i in range(1, len(notes)):
-            self.assertTrue(notes[i - 1].pk < notes[i].pk)
-
-
-class TestNoteDetail(TestCase):
-    """
-    Тест для проверки детальной информации о заметке.
-
-    Проверяет наличие ожидаемых полей в контексте ответа.
-    """
-
-    @classmethod
-    def setUpTestData(cls):
-        """
-        Создаёт тестовые данные для всех тестов в классе.
-
         Создаётся пользователь и заметка для тестирования.
         """
         cls.author = User.objects.create(username='author')
+        cls.other_user = User.objects.create(username='not_author')
         cls.note = Note.objects.create(
-            pk=1,
             title='Тестовая заметка',
             text='Текст заметки',
             author=cls.author,
-            slug='testnote'
+            slug='testnote-1'
         )
-        cls.url = reverse('notes:detail', kwargs={'note_slug': cls.note.slug})
-        cls.auth_client = Client()
-        cls.auth_client.force_login(cls.author)
-
-    def test_note_detail_contains_expected_fields(self):
-        """
-        Проверяет, что детальная страница заметки содержит все ожидаемые поля.
-
-        Поля включают id, title, text, slug и author.
-        """
-        response = self.auth_client.get(self.url)
-
-        self.assertIn('note', response.context)
-        note_obj = response.context['note']
-
-        expected = (
-            ('id', self.note.pk),
-            ('title', self.note.title),
-            ('text',   self.note.text),
-            ('slug',   self.note.slug),
-            ('author', self.author),
+        cls.other_user_note = Note.objects.create(
+            title='Тестовая заметка',
+            text='Текст заметки',
+            author=cls.other_user,
+            slug='testnote-2'
         )
+        cls.author_client = Client()
+        cls.author_client.force_login(cls.author)
+        cls.other_user_client = Client()
+        cls.other_user_client.force_login(cls.other_user)
 
-        for field, exp_value in expected:
-            with self.subTest(field=field):
-                self.assertEqual(getattr(note_obj, field), exp_value)
+        cls.url = reverse('notes:list')
 
-    def test_note_detail_contains_edit_and_delete_href(self):
-        """
-        Проверяет наличие ссылки для редактирования и удаления заметки.
+    def test_list_page_contains_note(self):
+        response = self.author_client.get(self.url)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
+        self.assertIn(self.note, response.context['object_list'])
 
-        Проверяются наличие href для редактирования и удаления с
-        соответствующими маршрутами.
-        """
-        response = self.auth_client.get(self.url)
+    def test_list_page_contains_only_author_notes(self):
+        """Список заметок не содержит заметки другого пользователя."""
+        response = self.author_client.get(self.url)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
+        object_list = response.context['object_list']
+        self.assertIn(self.note, object_list)
+        self.assertNotIn(self.other_user_note, object_list)
 
-        self.assertIn('note', response.context)
-        note_obj = response.context['note']
-
-        slug = note_obj.slug
-
-        route_names = (
-            ('edit',   'notes:edit'),
-            ('delete', 'notes:delete'),
+    def test_add_and_edit_pages_contain_form(self):
+        urls = (
+            ('notes:add', None),
+            ('notes:edit', (self.note.slug,))
         )
-
-        for name, route in route_names:
-            with self.subTest(link=name):
-                url = reverse(route, kwargs={'note_slug': slug})
-                self.assertContains(response, f'href="{url}"')
+        for name, args in urls:
+            url = reverse(name, args=args)
+            response = self.author_client.get(url)
+            self.assertEqual(response.status_code, HTTPStatus.OK)
+            self.assertIn('form', response.context)
+            note_form = response.context['form']
+            # Проверяем, что форма - экземпляр класса NoteForm:
+            self.assertIsInstance(note_form, NoteForm)

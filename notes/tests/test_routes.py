@@ -11,7 +11,7 @@
 from http import HTTPStatus
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
 
 from notes.models import Note
@@ -23,7 +23,7 @@ User = get_user_model()
 class TestRoutes(TestCase):
     """Тест для маршрутов."""
 
-    NOTE_URLS = ('notes:detail', 'notes:edit', 'notes:delete')
+    NOTE_URLS = ['notes:detail', 'notes:edit', 'notes:delete']
 
     @classmethod
     def setUpTestData(cls):
@@ -32,7 +32,7 @@ class TestRoutes(TestCase):
         Метод вызывается один раз, перед выполнением всех тестов класса.
         """
         cls.author = User.objects.create(username='testUserAuthor')
-        cls.non_author = User.objects.create(username='testUserAnonymous')
+        cls.not_author = User.objects.create(username='testUserAnonymous')
         cls.note = Note.objects.create(
             title='Название',
             text='Текст',
@@ -52,6 +52,16 @@ class TestRoutes(TestCase):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, HTTPStatus.OK)
 
+    def test_logout_availability(self):
+        """Logout недоступна при GET-запросе и корректно работает при POST."""
+        url = reverse('users:logout')
+
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, HTTPStatus.METHOD_NOT_ALLOWED)
+
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
+
     def test_availability_for_note_detail_edit_delete(self):
         """
         Доступность заметки для её автора и недоступность для анонима.
@@ -67,7 +77,7 @@ class TestRoutes(TestCase):
         """
         users_statuses = (
             (self.author, HTTPStatus.OK),
-            (self.non_author, HTTPStatus.NOT_FOUND),
+            (self.not_author, HTTPStatus.NOT_FOUND),
         )
         for user, status in users_statuses:
             self.client.force_login(user)
@@ -76,20 +86,27 @@ class TestRoutes(TestCase):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, status)
 
-    def test_redirect_for_anonymous_clien(self):
+    def test_redirect_for_anonymous_client(self):
         """Проверка редиректов для неавторизованного пользователя.
 
         Анонимный пользователь перенаправляется на страницу логина при попытке
-        доступа к любым url, связанным с заметкой, из константы NOTE_URLS.
+        доступа к любым url, связанным с заметкой.
 
         Для каждого URL из NOTE_URLS выполняется проверка, что клиент получает
         редирект на страницу логина с параметром next, содержащим исходный
         запрошенный URL.
         """
+        slug = (self.note.slug,)
+        urls = (
+            ('notes:detail', slug),
+            ('notes:edit', slug),
+            ('notes:delete', slug),
+            ('notes:success', None),
+        )
         login_url = reverse('users:login')
-        for name in self.NOTE_URLS:
+        for name, args in urls:
             with self.subTest(name=name):
-                url = reverse(name, kwargs={'note_slug': self.note.slug})
+                url = reverse(name, args=args)
                 redirect_url = f'{login_url}?next={url}'
                 response = self.client.get(url)
                 self.assertRedirects(response, redirect_url)
