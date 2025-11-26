@@ -47,7 +47,7 @@ def test_not_unique_slug(author_client, note, form_data):
 # Фикстура author_client сама открывает транзакцию и
 # обеспечивает доступ к базе данных, благодаря django.test.Client.
 def test_empty_slug(author_client, form_data):
-    """Заметка получает уникальный слаг если он не указан."""
+    """Заметка получает уникальный слаг, если он не указан."""
     url = reverse('notes:add')
     form_data.pop('slug')
     response = author_client.post(url, data=form_data)
